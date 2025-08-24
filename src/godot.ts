@@ -335,34 +335,30 @@ async function doExport(): Promise<BuildResult[]> {
   return buildResults;
 }
 
-/**
- * Breadth first recursive search for the Godot executable.
- * @param basePath
- * @returns
- */
 function findGodotExecutablePath(basePath: string): string | undefined {
-  core.info(`🔍 Looking for Godot executable in ${basePath}`);
-  const paths = fs.readdirSync(basePath);
-  const dirs: string[] = [];
+  const queue: string[] = [basePath];
 
-  for (const subPath of paths) {
-    const fullPath = path.join(basePath, subPath);
-    const stats = fs.statSync(fullPath);
-    const isLinux = stats.isFile() && (path.extname(fullPath) === '.64' || path.extname(fullPath) === '.x86_64');
-    const isMac = process.platform === 'darwin' && stats.isDirectory() && path.extname(fullPath) === '.app';
-    if (isLinux) {
-      return fullPath;
-    } else if (isMac) {
-      // on a Mac, we need to target the executable inside the .app directory. MacOS abstractions are weird
-      return path.join(fullPath, 'Contents', 'MacOS', 'Godot');
-    } else {
-      dirs.push(fullPath);
+  while (queue.length > 0) {
+    const current = queue.shift()!;
+    const entries = fs.readdirSync(current);
+
+    for (const entry of entries) {
+      const fullPath = path.join(current, entry);
+      const stats = fs.statSync(fullPath);
+
+      const isLinux = stats.isFile() && [".64", ".x86_64"].includes(path.extname(fullPath));
+      const isMac = process.platform === "darwin" && stats.isDirectory() && fullPath.endsWith(".app");
+
+      if (isLinux) {
+        return fullPath;
+      } else if (isMac) {
+        return path.join(fullPath, "Contents", "MacOS", "Godot");
+      } else if (stats.isDirectory()) {
+        queue.push(fullPath);
+      }
     }
   }
 
-  for (const dir of dirs) {
-    return findGodotExecutablePath(dir);
-  }
   return undefined;
 }
 
